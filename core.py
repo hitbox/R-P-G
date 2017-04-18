@@ -1,628 +1,518 @@
-import logging
-import os
-import pygame
-import pygame.gfxdraw
-import random
-import sys
-import time
-
+import pygame, time, random
+from pygame import gfxdraw
 from pygame.locals import *
 
-logging.basicConfig()
-logger = logging.getLogger('rpg')
-logger.setLevel(logging.DEBUG)
-
+show = True
 playG = True
+tileWid=15
+tileHei=15
 
 mapno = 0
 mapbool = True
 
-GAME_OVER_SCREEN = False
-
-START, INFO, EXIT = range(3)
-buttons = [False] * 3
-
-battle = False
-make_random_enemy = True
-SCREEN_WIDTH, SCREEN_HEIGHT = 640, 480
-
-os.environ['SDL_VIDEO_CENTERED'] = '1'
-
-pygame.init()
-screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-
+gmoscr = False
 
 def bch(bcc):
     global BATTLE_CH
-    BATTLE_CH = random.randint(bcc, 20)
-
+    BATTLE_CH = random.randint(bcc,20)
 bch(1)
-current_enemy = random.randint(0,3)
+randenem = random.randint(0,3)
 
-info_text = ["This is a little project made with pygame, trying to be a Roguelike.",
-             "Coded entirely by mynameajeff."]
+info_text = [
+"This is a little project made with pygame, trying to be a Roguelike.",
+"Coded entirely by mynameajeff."
+]
 
-TILE_WIDTH = 15
-TILE_HEIGHT = 15
-
-def parse_map(fn):
-    global current_map
-    current_map = []
-    path = "level/%s.lvl" % (fn, )
-    for line in open(path).readlines():
-        for hero in line.split(" "):
-            if hero in " \n":
-                continue
-            current_map.append(hero)
-
-BLACK = (0,0,0)
-WHITE = (255,255,255)
-
-MAP_COLORS = {
-    '1': (100,100,100),
-    '2': (100,0,0),
-    '3': (0,0,100),
-    '4': (0,100,0),
-    '5': (120,120,255),
-    '-': BLACK,
-}
-
-def render_map(mapPosX, mapPosY, tch):
+#~~~~~~~~~~~~~~ Map Load ~~~~~~~~~~~~~~
+tileWid=15
+tileHei=15
+def mP(file): #MapParse
+    global nl
+    count3=0
+    lvl,nl = [],[]
+    for line in iter(open("level/"+file+'.lvl')):
+        lvl.append(line.split(" "))
+        count3+=1
+    for count2 in range(count3):
+        try: nl+= lvl[count2]
+        except: pass
+        count2+=1
+        try: nl.remove("\n")
+        except:pass
+def mR(mapPosX,mapPosY,tch): #MapRender
     x2 = 0
     y = 25
-    for hero in current_map:
-        if hero in "123456-":
-            color = MAP_COLORS[hero]
-            draw_color_rect(x2+mapPosX,y+mapPosY,TILE_WIDTH+tch,TILE_HEIGHT,color)
-        elif hero == "+":
-            # NextLine
-            x2=-TILE_WIDTH
-            y += TILE_HEIGHT
-        x2 += tch + TILE_WIDTH
-
-class Button:
-
-    def __init__(self, text, x, y, width, height, inner_color, outer_color):
+    counter = 0
+    for x in range(len(nl)):
+        if nl[counter] == "1":
+            cR(x2+mapPosX,y+mapPosY,tileWid+tch,tileHei,(100,100,100))
+        elif nl[counter] == "2":
+            cR(x2+mapPosX,y+mapPosY,tileWid+tch,tileHei,(100,0,0))
+        elif nl[counter] == "3":
+            cR(x2+mapPosX,y+mapPosY,tileWid+tch,tileHei,(0,0,100))
+        elif nl[counter] == "4":
+            cR(x2+mapPosX,y+mapPosY,tileWid+tch,tileHei,(0,100,0))
+        elif nl[counter] == "5":
+            cR(x2+mapPosX,y+mapPosY,tileWid+tch,tileHei,(120,120,255))
+        elif nl[counter] == "-": #BlackBox
+            cR(x2+mapPosX,y+mapPosY,tileWid+tch,tileHei,(0,0,0))
+        elif nl[counter] == "+": #NextLine
+            x2=-tileWid
+            y+=tileHei
+        x2+=tch
+        x2+=tileWid
+        counter+=1
+        if counter > len(nl):
+            break
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+class button:
+    def __init__(self,text,posX,posY,WidX,HeiY,innerColour,outerColour):
         self.text = text
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-        self.inner_color = inner_color
-        self.outer_color = outer_color
-        self.textsize = 40
+        self.posX = posX
+        self.posY = posY
+        self.WidX = WidX
+        self.HeiY = HeiY
+        self.ic = innerColour
+        self.oc = outerColour
 
-    def draw(self, hover=False):
-        inner_color = (self.outer_color if hover else self.inner_color, ) * 3
-        outer_color = (self.inner_color if hover else self.outer_color, ) * 3
+    def Draw(self,textsize,textX,textY,size,checkBool,ic2,oc2):
+        if checkBool == True:
+            self.ic = ic2
+            self.oc = oc2
 
-        size = 5
+        cR(self.posX,self.posY,self.WidX,self.HeiY,(self.ic,self.ic,self.ic))
+        cR(self.posX+size,self.posY+size,self.WidX-(size*2),self.HeiY-(size*2),(self.oc,self.oc,self.oc))
+        cT(self.text,textX,textY,"munro", textsize, (100,100,100))
 
-        draw_color_rect(self.x, self.y, self.width, self.height, inner_color)
-        draw_color_rect(self.x+size, self.y+size, self.width-(size*2), self.height-(size*2), outer_color)
+    def Collision(self,x,y,fCall,*args):
+        if self.posX+self.WidX > x > self.posX:
+            if self.posY+self.HeiY > y > self.posY: fCall(*args)
 
-        img = render_text(self.text, "munro", self.textsize, (100,100,100))
-        rect = img.get_rect()
-        rect2 = pygame.Rect(0, 0, self.width, self.height)
-        rect2.topleft = (self.x, self.y)
-        rect.center = rect2.center
-        screen.blit(img, rect)
-
-    def collision(self, mousex, mousey, callback, *args):
-        if (self.x + self.width > mousex > self.x and self.y + self.height > mousey > self.y):
-            callback(*args)
-
+#~~~~~~~~~~~~~~ Items Handler Sys ~~~~~~~~~~~~~~
 class Item:
-
     def __init__(self):
-        self.iWid = TILE_WIDTH #itemWid
-        self.iHei = TILE_HEIGHT #itemHei
+        self.iWid = tileWid #itemWid
+        self.iHei = tileHei #itemHei
         self.it1 = 1
         self.it2 = 1
         self.d2 = []
-        self.d = []
+        self.d=[]
+        self.x2z=0
 
-    def drawcall(self, iX2, iY2, typebl):
-        iX = (15 * iX2) - 5
-        iY = (15 * iY2) + 10
+    def drawcall(self,iX2,iY2,typebl): #largo
+        iX = (15 * iX2)-5;iY = (15 * iY2)+10
 
-        if self.it2 == self.it1 and typebl == 1:
-            draw_color_rect(iX,iY,self.iWid,self.iHei,(0,0,255))
-
-        elif self.it2 == self.it1 and typebl == 2:
-            draw_color_rect(iX,iY,self.iWid,self.iHei,(0,100,255))
-
-        if hero.cX+(hero.size / 15) > iX2 >= hero.cX:
-            if hero.cY+(hero.size/15) > iY2 >= hero.cY:
-                if typebl == 1:
-                    self.drawcallext1()
-                else:
-                    self.drawcallext2()
-                self.it2 += 1
+        if self.it2 == self.it1 and typebl == 1: cR(iX,iY,self.iWid,self.iHei,(0,0,255))
+        elif self.it2 == self.it1 and typebl == 2: cR(iX,iY,self.iWid,self.iHei,(0,100,255))
+        else: del iX2,iY2#iX2 = None;iY2 = None
+        try:
+            if char.cX+(char.csize/15) > iX2 >= char.cX:
+                if char.cY+(char.csize/15) > iY2 >= char.cY:
+                    if typebl==1: self.drawcallext1()
+                    else: self.drawcallext2()
+                    self.it2+=1
+                    
+        except: pass
 
     def drawcallext1(self):
-        hero.size += 15
-        logger.debug("mcdonalds collected")
-
+        char.csize+=15
+        print("mcdonalds collected")
+        
     def drawcallext2(self):
-        if hero.hp >= (hero.hpmax-40):
-            hero.hp = hero.hpmax
-        else:
-            hero.hp += 40
-        logger.debug("health collected")
+        if char.hp >= (char.hpmax-40): char.hp = char.hpmax
+        else: char.hp+=40
+        print("health collected")
 
-    def randomitem(self, items):
-        for x in range(items):
-            # n1 x 15 42
-            self.d.append(random.randint(15,42))
-            # n2 y 1 30
-            self.d.append(random.randint(1,30))
+    def randomitem(self,itemamount):
+        for x in range(itemamount):
+            self.d.append(random.randint(15,42))#n1 x 15 42
+            self.d.append(random.randint(1,30))#n2 y 1 30
             self.d.append(random.randint(1,2))
             self.d2.append(Item())
+            self.x2z+=3
 
 itemclass = Item()
 
-def r(run):
+def r(Run):
     itemclass.randomitem(10)
-    x3s = 0
-    for x in range(run):
-        itemclass.d2[x].drawcall(itemclass.d[x3s], itemclass.d[x3s+1], itemclass.d[x3s+2])
-        x3s += 3
-
+    x3s=0
+    for x in range(Run):
+        itemclass.d2[x].drawcall(itemclass.d[x3s],itemclass.d[x3s+1],itemclass.d[x3s+2])
+        x3s+=3
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~ Char  Handler Sys ~~~~~~~~~~~~~~
 class Player:
-
-    def __init__(self, color):
+    def __init__(self,colour):
         self.hpmax = 100
-        self.hp = 100
-        self.size = 15
-        self.level = 1 #current level
-        self.level_up = 25 #xp for next level
+        self.hp = 100 #health
+        self.csize = 15 #size of character
+        self.lvl = 1 #current level
+        self.lvlN = 25 #xp for next level
         self.xp = 0 #experience points
         self.dmgM = 1 #damage multiplier
-        self.color = color
+        self.c = colour #colour of the character
 
-        self.cX = 17
-        self.cY = 6
+        self.cX = 17 #char.cX 255
+        self.cY = 6 #char.cY 90
 
     def Calc(self):
-        while self.xp >= self.level_up:
-            logger.debug("Level Up!")
-            self.level += 1
-            self.xp -= self.level_up
-            self.level_up = round(self.level_up * 1.5)
+        while self.xp >= self.lvlN:
+            print("Level Up!")
+            self.lvl += 1
+            self.xp -= self.lvlN
+            self.lvlN = round(self.lvlN * 1.5)
             self.hp = round(self.hp * 1.75)
             self.hpmax = round(self.hpmax * 1.75)
             self.dmgM *= 2
 
-    def draw_hp(self, hpX, hpY, enemi):
+    def HP(self,hpX,hpY,enemi):
         xrloop = 0
-        draw_color_rect(hpX, hpY, 75, 10, (255,0,0))
-        draw_color_text(str(self.hp - enemi.totalDmgDealt), hpX + 79, hpY - 2, "freesans", 11, BLACK)
-        for x in range(int(self.hp-enemi.totalDmgDealt)):
-            draw_color_rect(hpX + xrloop, hpY, 75 / self.hpmax, 10, (0,255,0))
-            xrloop += 75 / self.hpmax
-
-    def HPch(self, enemi):
-        global GAME_OVER_SCREEN
-        self.hp -= enemi.totalDmgDealt
-
-        if self.xp < 0:
-            hero.xp = 0
-
-        if self.hp < 1:
+        cR(hpX,hpY,75,10,(255,0,0))
+        cT(str(self.hp-enemi.totalDmgDealt),hpX+79,hpY-2,"freesans",11,(0,0,0))
+        for x in range(self.hp-enemi.totalDmgDealt):
+            cR(hpX+xrloop,hpY,75/self.hpmax,10,(0,255,0))
+            xrloop+=75/self.hpmax
+    def HPch(self,enemi):
+        global gmoscr
+        self.hp-=enemi.totalDmgDealt
+        if self.xp < 0: char.xp = 0
+        if self.hp < 1: 
             time.sleep(0.1)
-            GAME_OVER_SCREEN = True
-
+            gmoscr = True
         return self.hp
 
     def drawcall(self):
-        cX = (15 * self.cX)-5
-        cY = (15 * self.cY)+10
-        draw_color_rect(cX, cY, self.size, self.size, self.color)
-
-hero = Player((120,240,68))
-
+        cX = (15 * self.cX)-5;cY = (15 * self.cY)+10
+        cR(cX,cY,self.csize,self.csize,self.c)
+        
+char = Player((120,240,68))
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~ Enemy Handler Sys ~~~~~~~~~~~~~~
 class Enemy:
-
     totalDmgTaken = 0 #to the enemy
     totalDmgDealt = 0
+    def __init__(self, strength, xpout, gearband, lutband, enemC, textMov, HPmax, width):
+        self.xpout = xpout
+        self.str = strength
+        self.pX = 250
+        self.pY = 180
+        self.gb = gearband
+        self.lb = lutband
+        self.enemC = enemC
+        self.textMov = textMov
+        self.HPmax = HPmax
+        self.w = width
+    def EnemInfo(self,name): #250,180
+        cR(self.pX,self.pY,80,195,self.enemC) #ENEM 80
+        cT(name,265-self.textMov,140,"munro",20,(200,200,200))
 
-    description = ""
-
-    def __init__(self, **kwargs):
-        for name in ['strength', 'xpout', 'gearband', 'lutband', 'color',
-                     'textMov', 'HPmax', 'width']:
-            setattr(self, name, kwargs.get(name, getattr(self, name)))
-
-        self.x = 250
-        self.y = 180
-
-    def info(self, name):
-        # 250,180
-        draw_color_rect(self.x, self.y, 80, 195, self.color)
-        draw_color_text(name, 265-self.textMov, 140, "munro", 20, (200,200,200))
-
-    def draw_hp(self):
-        # The enemy's health bar.
+    def HP(self): #The enemies health bar.
         xrloop = 0
-        draw_color_rect(self.x-1,self.y-20,81,10,(255,0,0))
-        draw_color_text(str(self.HPmax-self.totalDmgTaken),self.x+84,self.y-22,"freesans",11,BLACK)
+        cR(self.pX-1,self.pY-20,81,10,(255,0,0))
+        cT(str(self.HPmax-self.totalDmgTaken),self.pX+84,self.pY-22,"freesans",11,(0,0,0))
         for x in range(self.HPmax-self.totalDmgTaken):
-            draw_color_rect(self.x+xrloop,self.y-20,80/self.HPmax,10,(0,255,0))
+            cR(self.pX+xrloop,self.pY-20,80/self.HPmax,10,(0,255,0))
             xrloop+=80/self.HPmax
 
-    def HPch(self, enemy_name, enemi):
-        global battle,make_random_enemy
+    def HPch(self,enem,enemi):
+        global battle,rnem
         # hpcurrent - random number [0 to yourDamage(with chance of crit)]
-
-        self.totalDmgTaken+= 100 * hero.dmgM
-
+        self.totalDmgTaken+= (100*char.dmgM)
         if self.totalDmgTaken >= self.HPmax:
-            draw_color_rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK)
-            hero.xp+= self.xpout
-            hero.Calc()
-            logger.debug("You Win! You killed the %s", enemy_name)
-            make_random_enemy = True
+            cR(0,0,Swidth,Sheight,(0,0,0))
+            char.xp+= self.xpout
+            char.Calc()
+            try:print("\nYou Win! You killed the",enem.split("an ")[1])
+            except:print("\nYou Win! You killed the",enem.split("a ")[1])
+            rnem = True
             bch(1)
-            parse_map("btl")
-            hero.HPch(enemi)
-            init_enemies()
+            mP("btl")
+            char.HPch(enemi)
+            Enems()
             battle = False
 
-    def run_away(self, enemy_name, enemi):
-        global battle,make_random_enemy
+    def HPch2(self,enem,enemi):
+        global battle,rnem
 
-        draw_color_rect(0,0,SCREEN_WIDTH,SCREEN_HEIGHT,BLACK)
-        logger.debug("you pussied out of the fight.")
-        make_random_enemy = True
+        cR(0,0,Swidth,Sheight,(0,0,0))
+        print("you pussied out of the fight.")
+        rnem = True
         bch(1)
-        parse_map("btl")
-        hero.HPch(enemi)
-        init_enemies()
+        mP("btl")
+        char.HPch(enemi)
+        Enems()
         battle = False
 
-    def AI(self, enemy_name, enemi):
-        global battle,make_random_enemy
-        attack_power = random.randint(0, self.strength)
+    def AI(self,enem,enemi):
+        global battle,rnem
+        attackpwr = random.randint(0,self.str)
 
         if self.totalDmgTaken < self.HPmax:
-            if attack_power == 0:
-                logger.debug("The %s missed when attacking you!", enemy_name)
+            if attackpwr == 0:
+                try:print("The",enem.split("an ")[1],"missed when attacking you!")
+                except:print("The",enem.split("a ")[1],"missed when attacking you!")
+
             else:
-                self.totalDmgDealt +=(3*attack_power)
-                logger.debug("The %s has attacked you for %s damage!", enemy_name, 3 * attack_power)
+                self.totalDmgDealt +=(3*attackpwr)
+                try:print("The",enem.split("an ")[1],"has attacked you for",(3*attackpwr),"damage!")
+                except:print("The",enem.split("a ")[1],"has attacked you for",(3*attackpwr),"damage!")
 
-                if self.totalDmgDealt >= hero.hp:
-                    draw_color_rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK)
-                    logger.debug("The %s has defeated you!", enemy_name)
-                    make_random_enemy = True
+                if self.totalDmgDealt >= char.hp:
+                    cR(0,0,Swidth,Sheight,(0,0,0))
+                    try:print("The",enem.split("an ")[1],"has defeated you!")
+                    except:print("The",enem.split("a ")[1],"has defeated you!")
+                    rnem = True
                     bch(0)
-                    parse_map("btl")
-                    hero.HPch(enemi)
-                    init_enemies()
+                    mP("btl")
+                    char.HPch(enemi)
+                    Enems()
                     battle = False
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+def Enems():
+    global Imp,Orc,Gremlin,Goblin,ObjEList
+    Imp = Enemy(2,10,"Destitute Gear","Destitute Loot",(25,120,25),0,500,80)
+    Orc = Enemy(5,25,"Poor Gear","Destitute Loot",(85,120,25),0,800,80)
+    Gremlin = Enemy(8,35,"Poor Gear","Poor Loot",(45,120,55),14,1200,80)
+    Goblin = Enemy(12,22,"Decent Gear","Poor Loot",(65,120,65),10,1400,80)
+    
+    Gremloblin = Enemy(15,64,"Hard Scales","Decent Loot",(125,120,125),25,3000,80)
+    ObjEList = [Imp,Orc,Gremlin,Goblin]
 
 
-class Imp(Enemy):
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Basic Draw Functions(Calls)
 
-    strength = 2
-    xpout = 10
-    gearband = "Destitute Gear"
-    lutband = "Destitute Loot"
-    color = (25,120,25)
-    textMov = 0
-    HPmax = 500
-    width = 80
-    description = "weak but can be strong in numbers."
-
-
-class Orc(Enemy):
-
-    strength = 5
-    xpout = 25
-    gearband = "Poor Gear"
-    lutband = "Destitute Loot"
-    color = (85,120,25)
-    textMov = 0
-    HPmax = 800
-    width = 80
-    description = "the imp's tougher brother."
-
-
-class Gremlin(Enemy):
-
-    strength = 8
-    xpout = 35
-    gearband = "Poor Gear"
-    lutband = "Poor Loot"
-    color = (45,120,55)
-    textMov = 14
-    HPmax = 1200
-    width = 80
-    description = "not as weak as you may think."
-
-
-class Goblin(Enemy):
-
-    strength = 12
-    xpout = 22
-    gearband = "Decent Gear"
-    lutband = "Poor Loot"
-    color = (65,120,65)
-    textMov = 10
-    HPmax = 1400
-    width = 80
-    description = "the toughest normal enemy in the first area."
-
-
-def init_enemies():
-    global enemies
-    #Gremloblin = Enemy(15,64,"Hard Scales","Decent Loot",(125,120,125),25,3000,80)
-    enemies = [Imp(), Orc(), Gremlin(), Goblin()]
-
-def draw_color_rect(x, y, width, height, color):
+def cR(x, y, width, height, color): #colorRect
     pygame.draw.rect(screen, color, (x,y,width,height))
 
-def draw_color_ball(x, y, radius, color):
+def cB(x, y, radius, color): #colorBall
     pygame.gfxdraw.filled_circle(screen,x,y,radius-1,color)
     pygame.gfxdraw.aacircle(screen,x,y,radius-1,color)
 
-def render_text(text, font, size, color, antialias=True):
-    path = "fonts/%s.ttf" % (font, )
-    font = pygame.font.Font(path, size)
-    return font.render(text, antialias, color)
-
-def draw_color_text(text, x, y, font, fsize, color):
-    path = "fonts/%s.ttf" % (font, )
-    myfont = pygame.font.Font(path, fsize)
+def cT(text, x, y, font, fsize, color): #colorText
+    myfont = pygame.font.Font("fonts/"+font+".ttf", fsize)
     msg = myfont.render(text, 1, color)
     screen.blit(msg, (x,y))
-
-enemies_names = ["an Imp","an Orc","a Gremlin","a Goblin"]
-
-BATTLE_ATTACK, BATTLE_DEFEND, BATTLE_INFO, BATTLE_RUN = range(4)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Situation DrawSpace Func Callers
+EnemL = ["an Imp","an Orc","a Gremlin","a Goblin"]
 boolist = [False] * 4 #bt0,bt1,bt2,bt3
+descrip = ["weak but can be strong in numbers.",
+    "the imp's tougher brother.",
+    "not as weak as you may think.",
+    "the toughest normal enemy in the first area."]
 
 def gameover():
-    draw_color_rect(0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, BLACK)
-    draw_color_text("GAME OVER",(SCREEN_WIDTH/2)-120,(SCREEN_HEIGHT/2)-40,"freesans",40,WHITE)
+    cR(0,0,Swidth,Sheight,(0,0,0))
+    cT("GAME OVER",(Swidth/2)-120,(Sheight/2)-40,"freesans",40,(255,255,255))
 
 lmbtimer = 0
 xoffset = 0
 
-battle_buttons = [
-    Button("Attack", 7, 25, 160, 50, 155, 135),
-    Button("Defend", 7, 80, 160, 50, 155, 135),
-    Button("Info", 7, 135, 160, 50, 155, 135),
-    Button("Run", 7, 190, 160, 50, 155, 135)
-]
-
-def update_battle(mousex, mousey, lmb):
-    global current_enemy,mapbool,boolist,lmbtimer,output
-
-    def callback(c, boolist, tl, lmb):
+def BATTLE_draw(x,y,lmb):
+    global randenem,mapbool,boolist,ObjEList,lmbtimer,output
+    def DH_inner(c,boolist,tl,lmb):
         global lmbtimer
-        #button.draw(40, tl[loop], tl[loop+4], 5, True, 135, 115)
-        button.draw(True)
+        BTLbtn.Draw(40,tl[loop],tl[loop+4],5,True,135,115)
         if lmb and lmbtimer <= 0:
-            lmbtimer += 0.2
+            lmbtimer +=0.2
             for cloop in range(4):
-                if c == cloop:
-                    boolist[cloop] = True
+                if c == cloop: boolist[cloop] = True
+    def BTNfunc(btnno,enem,enemi):
+        global battle,rnem,playG,output,charac,xoffset
+        if btnno ==0:
+            for enemloop in range(4):
+                if enem == EnemL[enemloop]:
+                    print("you attacked",enem,"for",(100*char.dmgM),"damage!")
+                    ObjEList[enemloop].HPch(enem,ObjEList[enemloop])
+                    ObjEList[enemloop].AI(enem,ObjEList[enemloop])
 
-    tl = [30, 30, 52, 52, 28, 82, 138, 193]
+        elif btnno ==1: print("to be coded!")
+        elif btnno ==2:
+            for enemloop in range(4): 
+                if enem == EnemL[enemloop]:
+                    print(enem+",",descrip[enemloop])
+        elif btnno ==3:
+            for enemloop in range(4):
+                if enem == EnemL[enemloop]:
+                    ObjEList[enemloop].HPch2(enem,ObjEList[enemloop])
+    y1 = [25,80,135,190]
+    tl = [30,30,52,52,28,82,138,193]
 
-    # creates gray bar at top of canvas
-    draw_color_rect(0,0,SCREEN_WIDTH,20,(128,128,128))
-    draw_main_space()
-    # Contains buttons
-    draw_color_rect(0,20,180,SCREEN_HEIGHT,(70,70,70))
-    # Divider
-    draw_color_rect(175,20,5,SCREEN_HEIGHT,(90,90,90))
+    divL5 = ["Attack","Defend","Info","Run"]
+    cR(0,0,Swidth,20,(128,128,128)) #creates gray bar at top of canvas
+    cR(0,20,Swidth,Sheight,(185,185,185)) #creates main draw space
+    cR(0,20,180,Sheight,(70,70,70)) #Contains buttons
+    cR(175,20,5,Sheight,(90,90,90)) #Divider
 
-    if mapno == 1 and not mapbool:
-        parse_map("btl")
-        init_enemies()
+    if mapno == 1 and mapbool == False:
+        mP("btl")
+        Enems()
         mapbool = True
 
-    render_map(175, 95, 5)
+    mR(175,95,5)
 
-    draw_color_rect(SCREEN_WIDTH-180-xoffset, SCREEN_HEIGHT-180, 75, 75, hero.color)
-    draw_color_text("Battle Mode!", SCREEN_WIDTH/2-18, 2, "freesans", 12, BLACK)
+    charac = cR(Swidth-180-xoffset,Sheight-180,75,75,char.c) #CHAR
 
-    for loop in range(len(enemies)):
+    cT("Battle Mode!",Swidth/2-18,2,"freesans",12,(0,0,0))
 
-        if current_enemy == loop:
-            enemies[loop].info(enemies_names[loop])
-            enemies[loop].draw_hp()
-            hero.draw_hp(SCREEN_WIDTH-180, SCREEN_HEIGHT-200, enemies[loop])
-
-        button = battle_buttons[loop]
-        button.draw()
-        button.collision(mousex, mousey, callback, loop, boolist, tl, lmb)
-
-        if boolist[loop]:
-            enem = enemies_names[loop]
-            enemy = enemies[loop]
-            if loop == BATTLE_ATTACK:
-                logger.debug("you attacked %s for %s damage!", enem, (100 * hero.dmgM))
-                enemy.HPch(enem, enemy)
-                enemy.AI(enem, enemy)
-            elif loop == BATTLE_DEFEND:
-                logger.debug("to be coded!")
-            elif loop == BATTLE_INFO:
-                logger.debug("%s, %s" % (enem, enemy.description))
-            elif loop == BATTLE_RUN:
-                enemy.run_away(enem, enemy)
-
+    for loop in range(4):
+        if randenem == loop: 
+            ObjEList[loop].EnemInfo(EnemL[loop])
+            ObjEList[loop].HP()
+            char.HP(Swidth-180,Sheight-200,ObjEList[loop])
+        BTLbtn = button(divL5[loop],7,y1[loop],160,50,155,135)
+        BTLbtn.Draw(40,tl[loop],tl[loop+4],5,False,135,115)
+        BTLbtn.Collision(x,y,DH_inner,loop,boolist,tl,lmb)
+        if boolist[loop] == True: BTNfunc(loop,EnemL[randenem],ObjEList[loop])
         boolist[loop] = False
-        if lmbtimer > 0:
-            lmbtimer-=0.01
+        if lmbtimer > 0: lmbtimer-=0.01
+    #print(lmbtimer)
 
-def draw_main_space():
-    # creates main draw space
-    draw_color_rect(0,20,SCREEN_WIDTH,SCREEN_HEIGHT,(185,185,185))
+def draw(charhp,charcsize,charlvl,charlvlN,charxp,chardmgM):
+    global tileWid,tileHei,show,playG,output
+    cR(0,0,640,20,(128,128,128)) #creates gray bar at top of canvas
+    cR(0,20,Swidth,Sheight,(185,185,185)) #creates main draw space
+    mR(220,0,0)
+    cR(0,20,220,Sheight,(70,70,70))
+    cR(215,20,5,Sheight,(90,90,90))
 
-def update_hero(charhp, charcsize, charlvl, charlvlN, charxp, chardmgM):
-    global TILE_WIDTH,TILE_HEIGHT,playG,output
-
-    # creates gray bar at top of canvas
-    draw_color_rect(0,0,SCREEN_WIDTH,20,(128,128,128))
-    draw_main_space()
-
-    render_map(220, 0, 0)
-    draw_color_rect(0,20,220,SCREEN_HEIGHT,(70,70,70))
-    draw_color_rect(215,20,5,SCREEN_HEIGHT,(90,90,90))
-
-    [("Health", charhp), ("Char Size", charcsize)]
-
-    alist1 = ["Health", "Char Size", "Level", "Next", "XP", "DMG*",
-              charhp, charcsize, charlvl, charlvlN, charxp, chardmgM]
+    alist1 = ["Health","Char Size","Level","Next","XP","DMG*",
+        charhp,charcsize,charlvl,charlvlN,charxp,chardmgM]
     avar1 = 50
     for x in range(6):
-        s = alist1[x] + ": " + str(alist1[x+6])
-        draw_color_text(s, 20, avar1, "munro", 30, (100,100,100))
+        cT(alist1[x]+": "+str(alist1[x+6]),20,avar1,"munro",30,(100,100,100))
         avar1+=30
     r(10)
-    hero.drawcall()
+    char.drawcall()
 
-main_screen_buttons = {
-    'info_back': Button("<==",20,25,SCREEN_WIDTH/5,50,255,235),
-    'start': Button("Start", SCREEN_WIDTH/3, SCREEN_HEIGHT/2, SCREEN_WIDTH/3, 50, 255, 235),
-    'info': Button("Info", SCREEN_WIDTH/3, SCREEN_HEIGHT/1.5, SCREEN_WIDTH/3, 50, 255, 235),
-    'exit': Button("Exit", SCREEN_WIDTH/3, SCREEN_HEIGHT/1.2, SCREEN_WIDTH/3, 50, 255, 235),
-}
+def INFO_draw(x,y,lmb):
+    def INFO_f():
+        btnInf.Draw(45,45,26,5,True,235,215)
+        if lmb: bl2[1] = False
 
-def update_info(mousex, mousey, lmb):
+    cR(0,20,Swidth,Sheight,(185,185,185)) #creates main draw space
+    cT(info_text[0],20,80,"freesans", 18, (100,100,100))
+    cT(info_text[1],22,110,"freesans", 18, (100,100,100))
 
-    def callback():
-        button.draw(True)
+    btnInf = button("<==",20,25,Swidth/5,50,255,235)
+    btnInf.Draw(45,45,26,5,False,235,215)
+    btnInf.Collision(x,y,INFO_f)
+
+bl2 = [False]*3#Start,Info,Exit
+
+def TITLE_draw(x,y,lmb):
+    def TH_inner(c,lmb):
+        btn1.Draw(40,Swidth/3+itrMov[c],480/divL1[c],5,True,235,215)
         if lmb:
-            buttons[INFO] = False
+            if c ==0: bl2[0] = True
+            elif c ==1: bl2[1] = True
+            elif c ==2: bl2[2] = True;sys.exit()
 
-    draw_main_space()
-    draw_color_text(info_text[0],20,80,"freesans", 18, (100,100,100))
-    draw_color_text(info_text[1],22,110,"freesans", 18, (100,100,100))
+    cR(0,0,640,20,(128,128,128)) #creates gray bar at top of canvas
+    cR(0,20,Swidth,Sheight,(185,185,185)) #creates main draw space
+    cT("RPG",Swidth/2-112,Sheight/6,"pxlvetica", 128, (100,100,100))
 
-    button = main_screen_buttons['info_back']
-    button.draw()
-    button.collision(mousex, mousey, callback)
+    BTN_names = ["Start","Info","Exit"]
+    itrMov=[60,70,70]
+    divL1 = [2,1.5,1.2]
 
-def draw_title(mousex, mousey, lmb):
+    for loop in range(3):
+        btn1 = button(BTN_names[loop],Swidth/3,Sheight/divL1[loop],Swidth/3,50,255,235)
+        btn1.Draw(40,Swidth/3+itrMov[loop],480/divL1[loop],5,False,235,215)
+        btn1.Collision(x,y,TH_inner,loop,lmb)
 
-    def callback(button, lmb):
-        button.draw(True)
-        if lmb and button.text == "Exit":
-            sys.exit()
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+#Main Pygame Loop $#!@ (The boring/confusing stuff...)
 
-    # creates gray bar at top of canvas
-    draw_color_rect(0,0,SCREEN_WIDTH,20,(128,128,128))
-    draw_main_space()
-    draw_color_text("RPG", SCREEN_WIDTH/2-112, SCREEN_HEIGHT/6, "pxlvetica", 128, (100,100,100))
+def whichFunc(x,y,left):
+    global mapno,mapbool,playG,rnem,randenem,battle
 
-    names = ["Start", "Info", "Exit"]
-    offsets = [60, 70, 70]
-    divs = [2, 1.5, 1.2]
-
-    for button in main_screen_buttons.values():
-        button.draw()
-        button.collision(mousex, mousey, callback, button, lmb)
-
-def update(x, y, left):
-    global mapno,mapbool,playG,make_random_enemy,current_enemy,battle
-
-    if GAME_OVER_SCREEN:
+    if gmoscr == True:
         playG = True
         battle = False
         gameover()
 
     if BATTLE_CH == 0:
-        if make_random_enemy:
-            current_enemy = random.randint(0,3)
-            make_random_enemy = False
+        if rnem == True: 
+            randenem = random.randint(0,3)
+            rnem = False
             battle = True
+        elif rnem == False: pass
         playG = True
-
-    if not battle and buttons[START] and not GAME_OVER_SCREEN:
+    if battle ==False and bl2[0] == True and gmoscr == False: 
         mapno = 0
-        update_hero(hero.hp, hero.size, hero.level, hero.level_up, hero.xp, hero.dmgM)
-
-    if battle and buttons[START] and not GAME_OVER_SCREEN:
+        draw(char.hp,char.csize,char.lvl,char.lvlN,char.xp,char.dmgM)
+    if battle ==True and bl2[0] ==True and gmoscr == False:
         mapno +=1
         playG = True #disables controls
-        update_battle(x, y, left)
-    else:
-        playG = False
+        BATTLE_draw(x,y,left)
+    else: playG = False
 
-    if buttons[INFO]:
-        update_info(x,y,left)
+    if bl2[1] == True: INFO_draw(x,y,left)
 
-    if not buttons[START] and not buttons[INFO]:
-        draw_title(x, y, left)
+    if bl2[0] == False and bl2[1] == False: TITLE_draw(x,y,left)
 
-    if mapno == 0 and mapbool:
-        parse_map("b")
+    if mapno == 0 and mapbool == True:
+        mP("b")
         mapbool = False
 
-def controls(event, x, y):
-    csize2 = (hero.size / 15)
-
+def controls(x,y):
+    csize2 = (char.csize/15)
     if event.key == pygame.K_UP:
-        logger.debug("Y; U: %s", hero.cY)
-        if hero.cY <= 1:
-            hero.cY = 1
-        else:
-            hero.cY -= 1
+        print("Y; U:",char.cY)
+        if char.cY <= 1: char.cY=1
+        else: char.cY-=1
+        char.Calc()
+        bch(0)
 
     elif event.key == pygame.K_DOWN:
-        logger.debug("Y; D: %s", hero.cY)
-        if hero.cY >= 31 - csize2:
-            hero.cY = 31 - csize2
-        else:
-            hero.cY += 1
+        print("Y; D:",char.cY)
+        if char.cY >=31-csize2: char.cY=31-csize2
+        else: char.cY+=1
+        char.Calc()
+        bch(0)
 
     elif event.key == pygame.K_LEFT:
-        logger.debug("X; L: %s", hero.cX)
-        if hero.cX <= 15:
-            hero.cX = 15
-        else:
-            hero.cX -= 1
+        print("X; L:",char.cX)
+        if char.cX <= 15: char.cX=15
+        else: char.cX-=1
+        char.Calc()
+        bch(0)
 
     elif event.key == pygame.K_RIGHT:
-        logger.debug("X; R: %s", hero.cX)
-        if hero.cX >= 43 - csize2:
-            hero.cX = 43 - csize2
-        else:
-            hero.cX += 1
+        print("X; R:",char.cX)
+        if char.cX >=43-csize2: char.cX=43-csize2
+        else: char.cX+=1
+        char.Calc()
+        bch(0)
 
-    hero.Calc()
-    bch(0)
+Swidth,Sheight = 640,480
 
-def main():
-    screen.set_alpha(None)
-    pygame.display.set_caption("RPG")
-    clock = pygame.time.Clock()
+pygame.init()
 
-    while not buttons[EXIT]:
-        mousex, mousey = pygame.mouse.get_pos()
-        lmb, _, _ = pygame.mouse.get_pressed()
+screen = pygame.display.set_mode((Swidth,Sheight))
+screen.set_alpha(None)
+pygame.display.set_caption("RPG")
+clock = pygame.time.Clock()
+rnem = True
+battle=False
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                buttons[EXIT] = True
+while not bl2[2]:
+    x,y = pygame.mouse.get_pos()
+    left,m,right = pygame.mouse.get_pressed()
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            bl2[2] = True
+            sys.exit()
+        elif event.type == pygame.KEYDOWN:
+            if event.key == K_END:
+                bl2[2] = True
                 sys.exit()
-
-            elif event.type == pygame.KEYDOWN:
-                if event.key == K_END:
-                    buttons[EXIT] = True
-                    sys.exit()
-
-                elif not playG:
-                    controls(event, mousex, mousey)
-
-        update(mousex, mousey, lmb)
-        pygame.display.update()
-        clock.tick(60)
-
-if __name__ == '__main__':
-    main()
+            elif playG == False:
+                controls(x,y)
+    whichFunc(x,y,left)
+    pygame.display.update()
+    clock.tick(60)
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
